@@ -13,7 +13,7 @@ public class ChatClientApplication extends Application {
     );
     Scene scene = new Scene(loader.load(), 600, 400);
     stage.setScene(scene);
-    stage.setTitle("Chat");
+    stage.setTitle("Pokalbių sistema");
     stage.show();
   }
 

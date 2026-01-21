@@ -5,6 +5,9 @@ import lt.kostas.chatapp.dto.Message;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -66,17 +69,18 @@ public class ChatServer {
     return users.get(username);
   }
 
-  public void persist() {
+  public synchronized void persist() {
     persistence.save(this);
   }
 
-  // main
   public static void main(String[] args) throws IOException {
-    ChatServer server = new ChatServer("chatdata.json");
+    Path dataFile = Paths.get("data", "chat-data.json");
+    Files.createDirectories(dataFile.getParent());
 
-    // Įterpiame shutdown hook
+    ChatServer server = new ChatServer(dataFile.toString());
+
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      System.out.println("Saving data before exit...");
+      System.out.println("Išsaugome duomenis prieš programos darbo pabaigą...");
       server.persist();
     }));
     server.start();
