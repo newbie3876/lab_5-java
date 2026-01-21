@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="lt.kostas.chatapp.controller.ChatController"
+      spacing="5" prefWidth="700" prefHeight="500">
+
+    <ListView fx:id="chatList" VBox.vgrow="ALWAYS"/>
+
+    <HBox spacing="5" alignment="CENTER">
+        <TextField fx:id="newRoomField" promptText="Naujo kambario id (pvz. covid)"/>
+        <Button text="Sukurti kambarį" onAction="#onCreateRoom"/>
+    </HBox>
+
+    <HBox spacing="13" alignment="CENTER">
+        <TextField fx:id="recipientField" promptText="Vartotojo vardas (privatai)"/>
+        <CheckBox fx:id="privateCheckbox" text="Privati žinutė"/>
+    </HBox>
+
+    <HBox alignment="CENTER">
+        <ComboBox fx:id="roomSelector" promptText="Pasirinkite kambarį" />
+    </HBox>
+
+    <HBox spacing="5" alignment="CENTER">
+        <TextField fx:id="inputField" HBox.hgrow="ALWAYS" maxWidth="300"/>
+        <Button text="Send" onAction="#onSend"/>
+    </HBox>
+</VBox>

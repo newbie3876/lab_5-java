@@ -1,6 +1,9 @@
 package lt.kostas.chatapp.server;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import lombok.Getter;
+import lt.kostas.chatapp.Room;
 import lt.kostas.chatapp.dto.Message;
 
 import java.io.*;
@@ -11,6 +14,7 @@ public class ClientHandler implements Runnable {
   private final ChatServer server;
   private PrintWriter out;
   private BufferedReader in;
+  @Getter
   private String username;
   private final Gson gson = new Gson();
 
@@ -19,14 +23,19 @@ public class ClientHandler implements Runnable {
     this.server = server;
   }
 
-  public String getUsername() {
-    return username;
-  }
-
-  public void send(Message msg) {
-    if (out != null) {
+  /**
+   * Synchronous send — patikrina socket būseną ir rašo JSON.
+   */
+  public synchronized void send(Message msg) {
+    if (out == null) return;
+    // papildoma patikra socket būsenai
+    if (socket == null || socket.isClosed()) return;
+    try {
       out.println(gson.toJson(msg));
       out.flush();
+    } catch (Exception e) {
+      // jeigu rašymas nepavyksta - pranešame (neužmušame gijos)
+      System.err.println("Klaida siuntant žinutę vartotojui " + username + ": " + e.getMessage());
     }
   }
 
@@ -35,11 +44,18 @@ public class ClientHandler implements Runnable {
     try {
       in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
       out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
-
       // expect first message to be CONNECT with username
       String line = in.readLine();
       if (line == null) return;
-      Message connectMsg = gson.fromJson(line, Message.class);
+      Message connectMsg;
+      try {
+        connectMsg = gson.fromJson(line, Message.class);
+      } catch (JsonSyntaxException je) {
+        // blogas pirmasis pranešimas - uždarome
+        send(new Message("ERROR", "server", null, "Invalid CONNECT message"));
+        return;
+      }
+
       if (!"CONNECT".equals(connectMsg.getType()) || connectMsg.getFrom() == null) {
         socket.close();
         return;
@@ -56,11 +72,21 @@ public class ClientHandler implements Runnable {
       // join general by default
       Room general = server.getOrCreateRoom("general");
       general.join(this);
+      // optionally broadcast join info to the room
+      general.broadcast(new Message("INFO", "server", general.getName(), username + " prisijungė."));
       send(new Message("INFO", "server", null, "Connected as " + username));
 
-      // read loop
+
       while ((line = in.readLine()) != null) {
-        Message msg = gson.fromJson(line, Message.class);
+        Message msg;
+        try {
+          msg = gson.fromJson(line, Message.class);
+        } catch (JsonSyntaxException je) {
+          // pranešame vartotojui apie blogą JSON ir tęsiame
+          send(new Message("ERROR", "server", null, "Invalid message format"));
+          continue;
+        }
+
         if (msg == null || msg.getType() == null) continue;
 
         switch (msg.getType()) {
@@ -71,6 +97,7 @@ public class ClientHandler implements Runnable {
           case "JOIN_ROOM" -> {
             Room r = server.getOrCreateRoom(msg.getRoom());
             r.join(this);
+            r.broadcast(new Message("INFO", "server", r.getName(), username + " prisijungė į kambarį."));
           }
 
           case "ROOM_MSG" -> {
@@ -94,22 +121,39 @@ public class ClientHandler implements Runnable {
           }
 
           case "DISCONNECT" -> {
-            // graceful disconnect
-            in.close();
-            out.close();
-            socket.close();
+            // graceful disconnect: išeinam iš ciklo
+            return;
+          }
+
+          default -> {
+            // unknown type - gal pranešti arba ignoruoti
+            send(new Message("ERROR", "server", null, "Unknown message type: " + msg.getType()));
           }
         }
       }
     } catch (IOException ex) {
-      ex.printStackTrace();
+      System.err.println("ClientHandler (" + username + ") IO klaida: " + ex.getMessage());
     } finally {
       // cleanup
-      if (username != null) {
-        server.unregisterUser(username);
+      try {
+        // broadcast leave to rooms
+        if (username != null) {
+          // pašaliname vartotoją iš serverio (tai pašalins ir iš kambarių)
+          server.unregisterUser(username);
+        }
+      } catch (Exception ignored) {
+      }
+      // uždarom srautus
+      try {
+        if (in != null) in.close();
+      } catch (IOException ignored) {
       }
       try {
-        socket.close();
+        if (out != null) out.close();
+      } catch (Exception ignored) {
+      }
+      try {
+        if (socket != null && !socket.isClosed()) socket.close();
       } catch (IOException ignored) {
       }
     }

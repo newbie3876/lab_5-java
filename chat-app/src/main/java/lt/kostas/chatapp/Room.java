@@ -1,21 +1,21 @@
-package lt.kostas.chatapp.server;
+package lt.kostas.chatapp;
 
+import lombok.Getter;
 import lt.kostas.chatapp.dto.Message;
+import lt.kostas.chatapp.server.ClientHandler;
 
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.stream.Collectors;
 
+
 public class Room {
+  @Getter
   private final String name;
   private final Set<ClientHandler> clients = new CopyOnWriteArraySet<>();
 
   public Room(String name) {
     this.name = name;
-  }
-
-  public String getName() {
-    return name;
   }
 
   public void join(ClientHandler client) {

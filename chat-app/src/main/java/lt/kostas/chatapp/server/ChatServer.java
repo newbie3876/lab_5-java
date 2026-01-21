@@ -1,5 +1,6 @@
 package lt.kostas.chatapp.server;
 
+import lt.kostas.chatapp.Room;
 import lt.kostas.chatapp.dto.Message;
 
 import java.io.IOException;
@@ -31,6 +32,8 @@ public class ChatServer {
   public void start() throws IOException {
     // load rooms/users if needed (optional)
     rooms.putIfAbsent("general", new Room("general"));
+    rooms.putIfAbsent("support", new Room("support"));
+    rooms.putIfAbsent("random", new Room("random"));
 
     ExecutorService pool = Executors.newCachedThreadPool();
     try (ServerSocket serverSocket = new ServerSocket(PORT)) {
