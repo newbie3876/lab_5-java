@@ -1,0 +1,59 @@
+{
+  "users": [
+    "Vartotojas318",
+    "Vartotojas125"
+  ],
+  "rooms": [
+    {
+      "name": "general",
+      "members": [
+        "Vartotojas318",
+        "Vartotojas125"
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "type": "ROOM_MSG",
+      "from": "Vartotojas318",
+      "room": "general",
+      "message": "labas"
+    },
+    {
+      "type": "ROOM_MSG",
+      "from": "Vartotojas318",
+      "room": "general",
+      "message": "ką tu?"
+    },
+    {
+      "type": "ROOM_MSG",
+      "from": "Vartotojas164",
+      "room": "general",
+      "message": "nieko"
+    },
+    {
+      "type": "ROOM_MSG",
+      "from": "Vartotojas125",
+      "room": "general",
+      "message": "aš irgi"
+    },
+    {
+      "type": "ROOM_MSG",
+      "from": "Vartotojas125",
+      "room": "general",
+      "message": "dsadsa"
+    },
+    {
+      "type": "ROOM_MSG",
+      "from": "Vartotojas318",
+      "room": "general",
+      "message": "sdads"
+    },
+    {
+      "type": "ROOM_MSG",
+      "from": "Vartotojas164",
+      "room": "general",
+      "message": "sdaads"
+    }
+  ]
+}
