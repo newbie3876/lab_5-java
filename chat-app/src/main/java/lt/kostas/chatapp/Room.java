@@ -4,6 +4,7 @@ import lombok.Getter;
 import lt.kostas.chatapp.dto.Message;
 import lt.kostas.chatapp.server.ClientHandler;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.stream.Collectors;
@@ -35,7 +36,7 @@ public class Room {
   public Set<String> memberUsernames() {
     return clients.stream()
             .map(ClientHandler::getUsername)
-            .filter(u -> u != null)
+            .filter(Objects::nonNull)
             .collect(Collectors.toSet());
   }
 }

@@ -15,12 +15,4 @@ public enum ChatRoomType {
     this.id = id;
     this.displayLt = displayLt;
   }
-
-  public static ChatRoomType fromId(String id) {
-    if (id == null) return ChatRoomType.GENERAL;
-    for (ChatRoomType room : values()) {
-      if (room.id.equalsIgnoreCase(id)) return room;
-    }
-    return ChatRoomType.GENERAL; // fallback
-  }
 }

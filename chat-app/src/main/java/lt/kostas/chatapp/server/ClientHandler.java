@@ -35,7 +35,7 @@ public class ClientHandler implements Runnable {
       out.flush();
     } catch (Exception e) {
       // jeigu rašymas nepavyksta - pranešame (neužmušame gijos)
-      System.err.println("Klaida siuntant žinutę vartotojui " + username + ": " + e.getMessage());
+      System.err.println("Klaida siunčiant žinutę vartotojui " + username + ": " + e.getMessage());
     }
   }
 
@@ -52,7 +52,7 @@ public class ClientHandler implements Runnable {
         connectMsg = gson.fromJson(line, Message.class);
       } catch (JsonSyntaxException je) {
         // blogas pirmasis pranešimas - uždarome
-        send(new Message("ERROR", "server", null, "Invalid CONNECT message"));
+        send(new Message("ERROR", "server", null, "Netinkama CONNECT žinutė."));
         return;
       }
 
@@ -64,7 +64,7 @@ public class ClientHandler implements Runnable {
       this.username = connectMsg.getFrom();
       boolean ok = server.registerUser(username, this);
       if (!ok) {
-        send(new Message("ERROR", "server", null, "Username already in use"));
+        send(new Message("ERROR", "server", null, "Toks vartotojo vardas jau egzistuoja."));
         socket.close();
         return;
       }
@@ -74,7 +74,7 @@ public class ClientHandler implements Runnable {
       general.join(this);
       // optionally broadcast join info to the room
       general.broadcast(new Message("INFO", "server", general.getName(), username + " prisijungė."));
-      send(new Message("INFO", "server", null, "Connected as " + username));
+      send(new Message("INFO", "server", null, "Prisijungta kaip: " + username));
 
 
       while ((line = in.readLine()) != null) {
@@ -83,7 +83,7 @@ public class ClientHandler implements Runnable {
           msg = gson.fromJson(line, Message.class);
         } catch (JsonSyntaxException je) {
           // pranešame vartotojui apie blogą JSON ir tęsiame
-          send(new Message("ERROR", "server", null, "Invalid message format"));
+          send(new Message("ERROR", "server", null, "Netinkamas žinutės formatas."));
           continue;
         }
 
@@ -93,41 +93,36 @@ public class ClientHandler implements Runnable {
           case "CREATE_ROOM" -> {
             server.getOrCreateRoom(msg.getRoom());
           }
-
           case "JOIN_ROOM" -> {
             Room r = server.getOrCreateRoom(msg.getRoom());
             r.join(this);
             r.broadcast(new Message("INFO", "server", r.getName(), username + " prisijungė į kambarį."));
           }
-
           case "ROOM_MSG" -> {
             Room room = server.getRoom(msg.getRoom());
             if (room != null) {
               room.broadcast(msg);
               server.messages.add(msg); // išsaugome žinutę
             } else {
-              send(new Message("ERROR", "server", null, "Room not found"));
+              send(new Message("ERROR", "server", null, "Pokalbių kambarys nerastas."));
             }
           }
-
           case "PRIVATE_MSG" -> {
             ClientHandler target = server.getUser(msg.getTo());
             if (target != null) {
               target.send(msg);
               server.messages.add(msg); // išsaugome žinutę
             } else {
-              send(new Message("ERROR", "server", null, "User not found"));
+              send(new Message("ERROR", "server", null, "Vartotojas nerastas."));
             }
           }
-
           case "DISCONNECT" -> {
             // graceful disconnect: išeinam iš ciklo
             return;
           }
-
           default -> {
             // unknown type - gal pranešti arba ignoruoti
-            send(new Message("ERROR", "server", null, "Unknown message type: " + msg.getType()));
+            send(new Message("ERROR", "server", null, "Nežinomas žinutės tipas: " + msg.getType()));
           }
         }
       }
