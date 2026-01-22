@@ -4,7 +4,6 @@ module lt.kostas.chatapp {
 
   requires org.controlsfx.controls;
   requires com.google.gson;
-  requires static lombok;
   requires java.logging;
 
   opens lt.kostas.chatapp to javafx.fxml;

@@ -1,42 +1,19 @@
 package lt.kostas.chatapp;
 
-import lombok.Getter;
-import lt.kostas.chatapp.dto.Message;
-import lt.kostas.chatapp.server.ClientHandler;
-
-import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.stream.Collectors;
-
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Room {
-  @Getter
-  private final String name;
-  private final Set<ClientHandler> clients = new CopyOnWriteArraySet<>();
+  public String id;
+  public String displayName;
+  // thread-safe set of members
+  public Set<String> members = ConcurrentHashMap.newKeySet();
 
-  public Room(String name) {
-    this.name = name;
+  public Room() {
   }
 
-  public void join(ClientHandler client) {
-    clients.add(client);
-  }
-
-  public void leave(ClientHandler client) {
-    clients.remove(client);
-  }
-
-  public void broadcast(Message msg) {
-    for (ClientHandler c : clients) {
-      c.send(msg);
-    }
-  }
-
-  public Set<String> memberUsernames() {
-    return clients.stream()
-            .map(ClientHandler::getUsername)
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
+  public Room(String id, String displayName) {
+    this.id = id;
+    this.displayName = displayName;
   }
 }

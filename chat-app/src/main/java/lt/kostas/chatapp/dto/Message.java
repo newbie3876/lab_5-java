@@ -1,24 +1,22 @@
 package lt.kostas.chatapp.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-
-@Getter
-@Builder
-@AllArgsConstructor
 public class Message {
-  private String type;     // CONNECT, ROOM_MSG, PRIVATE_MSG, CREATE_ROOM
-  private String from;
-  private String to;
-  private String room;
-  private String message;
+  public String type;
+  public String from;
+  public String to;
+  public String roomId;
+  public String text;
+  public long timestamp;
 
-  // papildomas konstruktorius Message objektų kūrimui:
-  public Message(String type, String from, String room, String message) {
+  public Message() {
+  }
+
+  public Message(String type, String from, String to, String roomId, String text) {
     this.type = type;
     this.from = from;
-    this.room = room;
-    this.message = message;
+    this.to = to;
+    this.roomId = roomId;
+    this.text = text;
+    this.timestamp = System.currentTimeMillis();
   }
 }

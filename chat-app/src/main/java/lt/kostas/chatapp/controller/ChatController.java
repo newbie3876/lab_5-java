@@ -1,282 +1,129 @@
 package lt.kostas.chatapp.controller;
 
 import javafx.application.Platform;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
-import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import lt.kostas.chatapp.dto.Message;
-import lt.kostas.chatapp.enums.ChatRoomType;
 import lt.kostas.chatapp.network.NetworkClient;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 public class ChatController {
   @FXML
-  private ListView<String> chatList;
+  private TextField usernameField;
   @FXML
-  private TextArea inputField;
+  private Button connectButton;
   @FXML
-  private ComboBox<String> roomSelector; // rodomi display pavadinimai
+  private ComboBox<String> roomSelector;
+  @FXML
+  private TextArea chatArea;
+  @FXML
+  private TextField inputField;
+  @FXML
+  private Button sendButton;
   @FXML
   private TextField newRoomField;
   @FXML
-  private TextField recipientField;
-  @FXML
-  private CheckBox privateCheckbox;
+  private Button createRoomButton;
 
+  private NetworkClient client;
   private String username;
-  private volatile NetworkClient client;
-  private final Map<String, ObservableList<String>> roomMessages = new HashMap<>(); // key = roomId
-  private final Map<String, String> displayToId = new HashMap<>();
-  private final Map<String, String> idToDisplay = new HashMap<>();
-  private final ObservableList<String> roomDisplays = FXCollections.observableArrayList();
-
-  private static final ChatRoomType DEFAULT_ROOM = ChatRoomType.GENERAL;
 
   @FXML
   public void initialize() {
-    username = "Vartotojas" + (int) (Math.random() * 1000);
+    // Naudokime aiškų room id; serveris turi tokį patį id.
+    roomSelector.getItems().add("general");
+    roomSelector.getSelectionModel().selectFirst();
 
-    // Initialize mappings & UI from enum defaults
-    for (ChatRoomType rt : ChatRoomType.values()) {
-      String id = rt.getId();
-      String display = rt.getDisplayLt();
-      idToDisplay.put(id, display);
-      displayToId.put(display, id);
-      if (!roomDisplays.contains(display)) roomDisplays.add(display);
-      roomMessages.putIfAbsent(id, FXCollections.observableArrayList());
-    }
+    connectButton.setOnAction(ev -> doConnect());
+    sendButton.setOnAction(ev -> doSend());
+    createRoomButton.setOnAction(ev -> doCreateRoom());
 
-    roomSelector.setItems(roomDisplays);
-    String defaultDisplay = idToDisplay.getOrDefault(DEFAULT_ROOM.getId(), DEFAULT_ROOM.getId());
-    roomSelector.setValue(defaultDisplay);
-    chatList.setItems(roomMessages.get(DEFAULT_ROOM.getId()));
-
-    // show localized names in dropdown (we already store displays)
-    roomSelector.setCellFactory(cb -> new ListCell<>() {
-      @Override
-      protected void updateItem(String item, boolean empty) {
-        super.updateItem(item, empty);
-        setText(empty || item == null ? null : item);
-      }
-    });
-    roomSelector.setButtonCell(roomSelector.getCellFactory().call(null));
-
-    // when user changes selected room -> set chat view and notify server (JOIN_ROOM)
-    roomSelector.valueProperty().addListener((obs, oldDisplay, newDisplay) -> {
-      if (newDisplay == null) return;
-      String roomId = displayToId.get(newDisplay);
-      if (roomId == null) {
-        // dynamic room that client only knows by display -> derive id
-        roomId = toIdFromDisplay(newDisplay);
-        displayToId.put(newDisplay, roomId);
-        idToDisplay.put(roomId, newDisplay);
-      }
-      roomMessages.putIfAbsent(roomId, FXCollections.observableArrayList());
-      chatList.setItems(roomMessages.get(roomId));
-
-      // inform server (if connected) that we joined this room
-      if (client != null) sendJoinRoom(roomId);
-    });
-    connectAsync();
-  }
-
-  @FXML
-  private void onSend() {
-    if (client == null) {
-      chatList.getItems().add("[SISTEMA] Neprisijungta prie serverio.");
-      return;
-    }
-
-    String text = inputField.getText();
-    if (text == null || (text = text.trim()).isEmpty()) return;
-
-    try {
-      if (privateCheckbox != null && privateCheckbox.isSelected()) {
-        String toUser = recipientField == null ? null : recipientField.getText();
-        if (toUser == null || toUser.isBlank()) {
-          chatList.getItems().add("[SISTEMA] Įveskite gavėjo vardą privačiai žinutei.");
-          return;
+    // Kai vartotojas pakeičia pasirinkimą, praneškime serveriui, kad joinina tą kambarį.
+    roomSelector.setOnAction(ev -> {
+      if (client != null && username != null && !username.isEmpty()) {
+        String selectedRoom = roomSelector.getValue();
+        if (selectedRoom != null && !selectedRoom.isEmpty()) {
+          Message join = new Message("join-room", username, null, selectedRoom, null);
+          client.send(join);
         }
-        Message pm = Message.builder()
-                .type("PRIVATE_MSG")
-                .from(username)
-                .to(toUser.trim())
-                .message(text)
-                .build();
-        client.send(pm);
-        // show local confirmation for sender
-        chatList.getItems().add("[PRIVATI] sau -> " + toUser.trim() + ": " + text);
-      } else {
-        String selectedDisplay = roomSelector == null ? null : roomSelector.getValue();
-        String roomId = selectedDisplay == null
-                ? DEFAULT_ROOM.getId()
-                : displayToId.getOrDefault(selectedDisplay, toIdFromDisplay(selectedDisplay));
-
-        // ensure there's a roomMessages list
-        roomMessages.putIfAbsent(roomId, FXCollections.observableArrayList());
-
-        Message rm = Message.builder()
-                .type("ROOM_MSG")
-                .from(username)
-                .room(roomId)
-                .message(text)
-                .build();
-        client.send(rm);
-
-        // optionally show the sent message locally in the same room's list
-        roomMessages.get(roomId).add(username + " (aš): " + text);
       }
-      inputField.clear();
-    } catch (Exception ex) {
-      final String err = ex.getMessage() == null ? ex.toString() : ex.getMessage();
-      Platform.runLater(() -> chatList.getItems().add("[SISTEMA] Klaida siunčiant: " + err));
+    });
+  }
+
+  private void doConnect() {
+    username = usernameField.getText().trim();
+    if (username.isEmpty()) return;
+    client = new NetworkClient();
+    try {
+      client.connect("localhost", 55555, this::onMessage);
+      // send register
+      Message m = new Message("register", username, null, null, null);
+      client.send(m);
+      // po registracijos automatiškai joininam dabartinį pasirinktą kambarį
+      String currentRoom = roomSelector.getValue();
+      if (currentRoom != null && !currentRoom.isEmpty()) {
+        Message join = new Message("join-room", username, null, currentRoom, null);
+        client.send(join);
+      }
+      appendLocal("Prisijungta kaip: " + username);
+    } catch (Exception e) {
+      appendLocal("Prisijungimas nepavyko: " + e.getMessage());
+      client = null;
     }
   }
 
-  @FXML
-  private void onCreateRoom() {
+  private void doSend() {
     if (client == null) {
-      chatList.getItems().add("[SISTEMA] Negalima sukurti kambario: nėra prisijungimo.");
+      appendLocal("Nesu prijungęs prie serverio.");
       return;
     }
-
-    String display = newRoomField.getText();
-    if (display == null || display.isBlank()) return;
-    display = display.trim();
-
-    String id = toIdFromDisplay(display);
-    // add to local maps and UI if not exists
-    if (!displayToId.containsKey(display)) {
-      displayToId.put(display, id);
-      idToDisplay.put(id, display);
-      roomDisplays.add(display);
+    String text = inputField.getText();
+    if (text == null || text.isEmpty()) return;
+    String roomId = roomSelector.getValue();
+    if (roomId == null || roomId.isEmpty()) {
+      appendLocal("Pasirinkite kambarį.");
+      return;
     }
-    roomMessages.putIfAbsent(id, FXCollections.observableArrayList());
+    Message m = new Message("message", username, null, roomId, text);
+    client.send(m);
+    inputField.clear();
+    // NEPRIDĖTI lokaliai — laukiame serverio broadcast (ji mums taip pat bus atsiųsta)
+  }
 
-    // send CREATE_ROOM to server
-    client.send(Message.builder()
-            .type("CREATE_ROOM")
-            .from(username)
-            .room(id)
-            .message(display) // send display optionally
-            .build());
+  private void doCreateRoom() {
+    if (client == null || username == null) {
+      appendLocal("Reikia prisijungti prieš kuriant kambarį.");
+      return;
+    }
+    String rn = newRoomField.getText();
+    if (rn == null || rn.isEmpty()) return;
+    String id = rn.trim().toLowerCase().replaceAll("\\s+", "-");
+    Message m = new Message("create-room", username, null, id, rn); // roomId=id, text=displayName
+    client.send(m);
 
-    // select and auto-join
-    roomSelector.getSelectionModel().select(display);
-    sendJoinRoom(id);
+    // Pridedame ROOM ID (ne display text) į ComboBox, kad toliau naudotume tą patį id
+    if (!roomSelector.getItems().contains(id)) {
+      roomSelector.getItems().add(id);
+    }
+    // automatiškai joininam ką tik sukurtą kambarį
+    Message join = new Message("join-room", username, null, id, null);
+    client.send(join);
 
-    chatList.getItems().add("[SISTEMA] Kambarys sukurtas: " + display + " (" + id + ")");
     newRoomField.clear();
   }
 
-  private void connectAsync() {
-    Thread t = new Thread(() -> {
-      try {
-        client = new NetworkClient();
-        client.connect(
-                "localhost",
-                5555,
-                username,
-                msg -> Platform.runLater(() -> {
-                  if (msg == null || msg.getType() == null) return;
-                  switch (msg.getType()) {
-
-                    case "ROOM_MSG" -> {
-                      String roomId = msg.getRoom();
-                      if (roomId == null) return;
-                      roomMessages.putIfAbsent(roomId, FXCollections.observableArrayList());
-                      String display = idToDisplay.getOrDefault(roomId, roomId);
-                      // add message to that room's list
-                      roomMessages.get(roomId).add(msg.getFrom() + ": " + msg.getMessage());
-                      // if this room is currently selected, ensure chatList shows it (listener handles it)
-                    }
-                    case "PRIVATE_MSG" -> {
-                      // show private to recipient (if this client is recipient) or as info
-                      String from = msg.getFrom();
-                      String body = msg.getMessage();
-                      chatList.getItems().add("[PRIVATI] " + from + ": " + body);
-                    }
-                    case "INFO" -> {
-                      chatList.getItems().add("[INFO] " + msg.getMessage());
-                    }
-                    case "ROOM_CREATED" -> {
-                      // Server announces a room (room id in msg.room, optional display in msg.message)
-                      String announcedId = msg.getRoom();
-                      String announcedDisplay = msg.getMessage(); // optional
-                      onServerAnnouncedRoom(announcedId, announcedDisplay);
-                    }
-                    case "ROOM_LIST" -> {
-                      // flexible parsing: msg.message may be comma-separated list: "id1:idDisplay1,id2:idDisplay2"
-                      String payload = msg.getMessage();
-                      if (payload != null && !payload.isBlank()) {
-                        String[] parts = payload.split(",");
-                        for (String p : parts) {
-                          p = p.trim();
-                          if (p.isEmpty()) continue;
-                          if (p.contains(":")) {
-                            String[] kv = p.split(":", 2);
-                            onServerAnnouncedRoom(kv[0].trim(), kv[1].trim());
-                          } else {
-                            onServerAnnouncedRoom(p, null);
-                          }
-                        }
-                      }
-                    }
-                  }
-                })
-        );
-      } catch (IOException e) {
-        Platform.runLater(() ->
-                chatList.getItems().add("[SISTEMA] Nepavyko prisijungti prie serverio: " + e.getMessage())
-        );
-        client = null;
-      }
-    }, "connect-thread-" + username);
-    t.setDaemon(true);
-    t.start();
-  }
-
-  private void onServerAnnouncedRoom(String roomId, String optDisplay) {
-    if (roomId == null || roomId.isBlank()) return;
-    String display = optDisplay == null || optDisplay.isBlank() ? idToDisplay.getOrDefault(roomId, roomId) : optDisplay;
-
-    // update maps and UI on JavaFX thread
+  private void onMessage(Message m) {
     Platform.runLater(() -> {
-      if (!idToDisplay.containsKey(roomId)) {
-        idToDisplay.put(roomId, display);
-      }
-      if (!displayToId.containsKey(display)) {
-        displayToId.put(display, roomId);
-      }
-      if (!roomDisplays.contains(display)) {
-        roomDisplays.add(display);
-      }
-      roomMessages.putIfAbsent(roomId, FXCollections.observableArrayList());
+      String room = m.roomId != null ? m.roomId : "pm";
+      String from = m.from != null ? m.from : "server";
+      String line = String.format("[%s] %s: %s", room, from, m.text);
+      chatArea.appendText(line + "\n");
     });
   }
 
-  private void sendJoinRoom(String roomId) {
-    if (client == null) return;
-    client.send(Message.builder()
-            .type("JOIN_ROOM")
-            .from(username)
-            .room(roomId)
-            .build());
-  }
-
-  private String toIdFromDisplay(String display) {
-    if (display == null) return "";
-    return display.trim().toLowerCase().replaceAll("\\s+", "-");
-  }
-
-  public void close() {
-    if (client != null) {
-      client.close();
-      client = null;
-    }
+  private void appendLocal(String text) {
+    Platform.runLater(() -> chatArea.appendText("[local] " + text + "\n"));
   }
 }

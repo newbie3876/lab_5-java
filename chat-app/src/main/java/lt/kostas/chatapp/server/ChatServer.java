@@ -2,151 +2,128 @@ package lt.kostas.chatapp.server;
 
 import lt.kostas.chatapp.Room;
 import lt.kostas.chatapp.dto.Message;
-import lt.kostas.chatapp.enums.ChatRoomType;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ChatServer {
-  public static final int PORT = 5555;
+  private final int port;
+  private final Map<String, ClientHandler> clients = new ConcurrentHashMap<>();
+  private final Map<String, Room> rooms = new ConcurrentHashMap<>();
+  private final List<Message> messages = Collections.synchronizedList(new ArrayList<>());
   private final PersistenceManager persistence;
-  private static final Logger LOGGER = Logger.getLogger(ChatServer.class.getName());
 
-  final ConcurrentMap<String, Room> rooms = new ConcurrentHashMap<>();
-  final ConcurrentMap<String, ClientHandler> users = new ConcurrentHashMap<>();
-  final List<Message> messages = Collections.synchronizedList(new ArrayList<>());
-
-  // Executor and serverSocket as fields so we can control lifecycle from stop()
-  private final ExecutorService pool = Executors.newCachedThreadPool();
-  private ServerSocket serverSocket;
-  private volatile boolean running = false;
-
-  public ChatServer(String persistFile) {
-    this.persistence = new PersistenceManager(persistFile);
+  public ChatServer(int port, String storageFile) {
+    this.port = port;
+    this.persistence = new PersistenceManager(storageFile);
+    // DEFAULT ROOM
+    Room general = new Room("general", "General");
+    rooms.put("general", general);
   }
 
   public void start() throws IOException {
-    // Ensure default rooms exist
-    for (ChatRoomType type : ChatRoomType.values()) {
-      rooms.putIfAbsent(type.getId(), new Room(type.getId()));
-    }
-
-    serverSocket = new ServerSocket(PORT);
-    running = true;
-    System.out.println("Server'is paleistas šiame port'e: " + PORT);
-
-    try {
-      while (running && !serverSocket.isClosed()) {
-        try {
-          Socket socket = serverSocket.accept();
-          pool.execute(new ClientHandler(socket, this));
-        } catch (IOException e) {
-          // If running was set to false and socket was closed, accept() may throw — ignore in that case
-          if (running) {
-            LOGGER.log(Level.SEVERE, "Klaida priimant ryšį", e);
-          }
-        }
+    try (ServerSocket serverSocket = new ServerSocket(port)) {
+      System.out.println("Server'is dirba šiame port'e: " + port);
+      while (!serverSocket.isClosed()) {
+        Socket socket = serverSocket.accept(); // jei serverSocket uždaromas kitur, accept() mesti SocketException ir loop baigiasi
+        ClientHandler handler = new ClientHandler(socket, this);
+        new Thread(handler).start();
       }
-    } finally {
-      // ensure resources are released if start() exits
-      stop();
     }
   }
 
-  /**
-   * Gracefully stop the server: stop accepting, close server socket, shutdown pool and persist data.
-   */
-  public synchronized void stop() {
-    if (!running && (serverSocket == null || serverSocket.isClosed())) {
-      return; // already stopped
-    }
+  // ChatServer.java
+  public boolean registerClient(String username, ClientHandler handler) {
+    if (username == null || username.isBlank()) return false;
 
-    running = false;
-
-    // close server socket to unblock accept()
-    if (serverSocket != null && !serverSocket.isClosed()) {
-      try {
-        serverSocket.close();
-      } catch (IOException e) {
-        System.err.println("Klaida uždarant ServerSocket: " + e.getMessage());
-      }
-    }
-
-    // shutdown executor service gracefully
-    pool.shutdown();
-    try {
-      if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
-        // force shutdown if not terminated in time
-        pool.shutdownNow();
-        if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
-          System.err.println("ExecutorService nepavyko užbaigti po priverstinio shutdown.");
-        }
-      }
-    } catch (InterruptedException ie) {
-      // re-interrupt thread and force shutdown
-      Thread.currentThread().interrupt();
-      pool.shutdownNow();
-    }
-    // persist data
-    try {
+    ClientHandler existing = clients.putIfAbsent(username, handler);
+    if (existing == null) {
+      // sėkmingai užregistruotas
       persist();
-    } catch (Exception e) {
-      System.err.println("Klaida išsaugant duomenis: " + e.getMessage());
-    }
-    System.out.println("Server'is sustojo.");
-  }
-
-  // pagalbiniai metodai skirti ClientHandler klasei
-  public boolean registerUser(String username, ClientHandler handler) {
-    return users.putIfAbsent(username, handler) == null;
-  }
-
-  public void unregisterUser(String username) {
-    ClientHandler ch = users.remove(username);
-    if (ch == null) return; // nothing to remove
-    for (Room r : rooms.values()) {
-      r.leave(ch);
+      System.out.println("Priregistruotas vartotojas: " + username);
+      return true;
+    } else if (existing == handler) {
+      // jau užregistruotas su tuo pačiu handler (idempotentiška)
+      return true;
+    } else {
+      // vardas užimtas kitoje sesijoje
+      System.out.println("Registracija nepavyko: '" + username + "' - toks vartotojas jau egzistuoja.");
+      return false;
     }
   }
 
-  public Room getOrCreateRoom(String name) {
-    rooms.putIfAbsent(name, new Room(name));
-    return rooms.get(name);
+  public void unregisterClient(String username) {
+    clients.remove(username);
+    // remove from rooms
+    for (Room r : rooms.values()) r.members.remove(username);
+    persist();
   }
 
-  public Room getRoom(String name) {
-    return rooms.get(name);
+  public void createRoom(String roomId, String displayName, String creator) {
+    rooms.computeIfAbsent(roomId, id -> {
+      Room r = new Room(id, displayName);
+      if (creator != null) r.members.add(creator);
+      persist();
+      return r;
+    });
   }
 
-  public ClientHandler getUser(String username) {
-    return users.get(username);
+  public void broadcastToRoom(Message msg) {
+    messages.add(msg);
+    Room r = rooms.get(msg.roomId);
+    if (r == null) return;
+
+    // Auto-join: jeigu siuntėjas dar nėra kambaryje, pridedame jį
+    if (msg.from != null) r.members.add(msg.from);
+
+    for (String user : r.members) {
+      ClientHandler ch = clients.get(user);
+      if (ch != null) ch.sendMessage(msg);
+    }
+    persist();
   }
 
-  public synchronized void persist() {
-    persistence.save(this);
+  public void sendPrivate(Message msg) {
+    messages.add(msg);
+    if (msg.to == null) return;
+    ClientHandler ch = clients.get(msg.to);
+    if (ch != null) ch.sendMessage(msg);
+    // also send copy to sender if present
+    ClientHandler sender = clients.get(msg.from);
+    if (sender != null && sender != ch) sender.sendMessage(msg);
+    persist();
+  }
+
+  private void persist() {
+    // Sukuriame nekintamas 'snapshot' kolekcijas, kad persistence.saveState
+    // negautų dalinai pakeistų concurrent kolekcijų.
+    Collection<Room> roomsSnapshot = new ArrayList<>(rooms.values());
+    Set<String> usersSnapshot = new HashSet<>(clients.keySet());
+
+    List<Message> messagesSnapshot;
+    // 'messages' yra Collections.synchronizedList — sinchronizuotai nukopijuojame
+    synchronized (messages) {
+      messagesSnapshot = new ArrayList<>(messages);
+    }
+    // Iškviečiame persistence su saugiais snapshot'ais
+    persistence.saveState(roomsSnapshot, usersSnapshot, messagesSnapshot);
+  }
+
+  public void joinRoom(String roomId, String username) {
+    Room r = rooms.get(roomId);
+    if (r != null) {
+      r.members.add(username);
+      persist();
+    }
   }
 
   public static void main(String[] args) throws IOException {
-    Path dataFile = Paths.get("data", "chat-data.json");
-    Files.createDirectories(dataFile.getParent());
-
-    ChatServer server = new ChatServer(dataFile.toString());
-
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      System.out.println("Užklausimas sustabdyti serverį — pradedame shutdown...");
-      server.stop();
-    }));
+    int port = 55555;
+    String file = "data/chat-data.json";
+    ChatServer server = new ChatServer(port, file);
     server.start();
   }
 }

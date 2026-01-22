@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="lt.kostas.chatapp.controller.ChatController">
+    <top>
+        <HBox spacing="8">
+            <padding>
+                <Insets top="8" right="8" bottom="8" left="8"/>
+            </padding>
+
+            <Label text="Username:"/>
+            <TextField fx:id="usernameField" prefWidth="120"/>
+            <Button fx:id="connectButton" text="Connect"/>
+            <Label text="Room:"/>
+            <ComboBox fx:id="roomSelector" prefWidth="150"/>
+            <TextField fx:id="newRoomField" promptText="New room"/>
+            <Button fx:id="createRoomButton" text="Create"/>
+        </HBox>
+    </top>
+
+    <center>
+        <TextArea fx:id="chatArea" editable="false"/>
+    </center>
+
+    <bottom>
+        <HBox spacing="8">
+            <padding>
+                <Insets top="8" right="8" bottom="8" left="8"/>
+            </padding>
+
+            <TextField fx:id="inputField" HBox.hgrow="ALWAYS"/>
+            <Button fx:id="sendButton" text="Send"/>
+        </HBox>
+    </bottom>
+</BorderPane>

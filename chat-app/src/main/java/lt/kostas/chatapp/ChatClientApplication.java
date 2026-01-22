@@ -5,19 +5,15 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
-import lt.kostas.chatapp.controller.ChatController;
+
+import java.util.Objects;
 
 public class ChatClientApplication extends Application {
   @Override
   public void start(Stage primaryStage) throws Exception {
-    FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/chat-log.fxml"));
-    Parent root = loader.load();
-    ChatController controller = loader.getController();
-
-    primaryStage.setScene(new Scene(root));
-    primaryStage.setOnCloseRequest(e -> {
-      controller.close();
-    });
+    Parent root = FXMLLoader.load(Objects.requireNonNull(getClass().getResource("/fxml/chat-room.fxml")));
+    primaryStage.setTitle("Pokalbių kambarys");
+    primaryStage.setScene(new Scene(root, 800, 600));
     primaryStage.show();
   }
 
