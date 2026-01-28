@@ -20,4 +20,9 @@ module lt.kostas.chatapp {
 
   exports lt.kostas.chatapp.controller;
   opens lt.kostas.chatapp.controller to javafx.fxml;
+  exports lt.kostas.chatapp.persistence;
+  opens lt.kostas.chatapp.persistence to javafx.fxml;
+  exports lt.kostas.chatapp.model;
+  opens lt.kostas.chatapp.model to javafx.fxml, com.google.gson;
+
 }

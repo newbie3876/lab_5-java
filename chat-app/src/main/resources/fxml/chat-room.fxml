@@ -2,38 +2,44 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
-<?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
-<BorderPane xmlns:fx="http://javafx.com/fxml"
-            fx:controller="lt.kostas.chatapp.controller.ChatController">
-    <top>
-        <HBox spacing="8">
-            <padding>
-                <Insets top="8" right="8" bottom="8" left="8"/>
-            </padding>
+<?import javafx.scene.layout.VBox?>
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="lt.kostas.chatapp.controller.ChatController"
+      alignment="CENTER">
+    <HBox spacing="8" alignment="CENTER">
+        <padding>
+            <Insets top="8" right="8" bottom="8" left="8"/>
+        </padding>
 
-            <Label text="Username:"/>
-            <TextField fx:id="usernameField" prefWidth="120"/>
-            <Button fx:id="connectButton" text="Connect"/>
-            <Label text="Room:"/>
-            <ComboBox fx:id="roomSelector" prefWidth="150"/>
-            <TextField fx:id="newRoomField" promptText="New room"/>
-            <Button fx:id="createRoomButton" text="Create"/>
-        </HBox>
-    </top>
+        <Label text="Vartotojo vardas:"/>
+        <TextField fx:id="usernameField" prefWidth="160"
+                   promptText="Įveskite vartotojo vardą"/>
+        <Button fx:id="connectButton" text="Prisijungti"/>
+        <Label text="Kambarys:"/>
+        <ComboBox fx:id="roomSelector" prefWidth="150"/>
+        <Label text="Gavėjas (PM):"/>
+        <ComboBox fx:id="recipientSelector" prefWidth="150"/>
+        <TextField fx:id="newRoomField" prefWidth="200"
+                   promptText="Naujo kambario pavadinimas"/>
+        <Button fx:id="createRoomButton" text="Sukurti kambarį"/>
+    </HBox>
 
-    <center>
-        <TextArea fx:id="chatArea" editable="false"/>
-    </center>
+    <HBox alignment="CENTER">
+        <TextArea fx:id="chatArea"
+                  editable="false"
+                  prefWidth="800"
+                  maxWidth="800"
+                  prefHeight="400"
+        />
+    </HBox>
 
-    <bottom>
-        <HBox spacing="8">
-            <padding>
-                <Insets top="8" right="8" bottom="8" left="8"/>
-            </padding>
+    <HBox spacing="8" alignment="CENTER">
+        <padding>
+            <Insets top="8" right="8" bottom="8" left="8"/>
+        </padding>
 
-            <TextField fx:id="inputField" HBox.hgrow="ALWAYS"/>
-            <Button fx:id="sendButton" text="Send"/>
-        </HBox>
-    </bottom>
-</BorderPane>
+        <TextArea fx:id="inputField" prefRowCount="6"/>
+        <Button fx:id="sendButton" text="Siųsti"/>
+    </HBox>
+</VBox>
