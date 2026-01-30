@@ -61,7 +61,6 @@ public class ChatController {
         }
       });
     }
-
     // 'Enter' išsiunčia žinutę, 'Shift+Enter' įterpia naują eilutę
     if (inputField != null) {
       inputField.addEventFilter(KeyEvent.KEY_PRESSED, ev -> {
@@ -103,7 +102,7 @@ public class ChatController {
 
   private void doSend() {
     if (client == null) {
-      appendLocal("Nesu prisijungęs prie serverio.");
+      appendLocal("Neprisijungta prie serverio.");
       return;
     }
     if (username == null || username.isEmpty()) {
@@ -199,7 +198,7 @@ public class ChatController {
           return;
         }
       }
-      // message (viešas/privatus) — taip pat naudojame lokalius kintamuosius
+      // message (viešas/privatus) - taip pat naudojame lokalius kintamuosius
       String msgText = m.text();
       String from = m.from();
       String resolvedFrom = (from != null) ? from : "server";

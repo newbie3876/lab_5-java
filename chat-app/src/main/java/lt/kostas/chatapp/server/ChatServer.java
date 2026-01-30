@@ -46,23 +46,21 @@ public class ChatServer {
       if (general != null) general.addMember(username);
       persist();
 
-      // 1) naujam klientui - atsiųsti visus jau prisijungusius vartotojus (kaip user-joined)
+      // naujam klientui - atsiųsti visus jau prisijungusius vartotojus (kaip user-joined)
       for (String user : clients.keySet()) {
         if (!user.equals(username)) {
           Message already = new Message("user-joined", "server", null, null, user);
           handler.sendMessage(already);
         }
       }
-
-      // 2) visiems kitiems pranešti, kad prisijungė naujas vartotojas
+      // visiems kitiems pranešti, kad prisijungė naujas vartotojas
       Message joined = new Message("user-joined", "server", null, null, username);
       for (ClientHandler ch : clients.values()) {
         if (ch != handler) {
           ch.sendMessage(joined);
         }
       }
-
-      System.out.println("Priregistruotas vartotojas: " + username);
+      // System.out.println("Priregistruotas vartotojas: " + username);
       return true;
     } else if (existing == handler) {
       return true;
@@ -94,7 +92,6 @@ public class ChatServer {
       Room r = rooms.get(roomId);
       if (creator != null) r.addMember(creator);
       persist();
-
       // pranešame visiems klientams, kad sukurtas naujas kambarys
       Message roomMsg = new Message("room-created", "server", null, roomId, displayName);
       for (ClientHandler ch : clients.values()) {

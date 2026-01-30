@@ -36,7 +36,7 @@ public class PersistenceImpl implements Persistence {
       } catch (AtomicMoveNotSupportedException ex) {
         Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
       }
-      logger.fine("Išsaugoti duomenys šiame faile: " + path);
+      logger.fine("Duomenys išsaugoti šiame faile: " + path);
     } finally {
       try {
         Files.deleteIfExists(tmp);
@@ -55,7 +55,7 @@ public class PersistenceImpl implements Persistence {
     try {
       write(model);
     } catch (IOException e) {
-      logger.log(Level.SEVERE, "Nepavyko išsaugoti būsenos faile: " + path, e);
+      logger.log(Level.SEVERE, "Nepavyko išsaugoti duomenų faile: " + path, e);
     }
   }
 }

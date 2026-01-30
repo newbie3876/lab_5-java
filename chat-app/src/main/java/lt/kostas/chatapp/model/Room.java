@@ -11,7 +11,7 @@ public class Room {
 
   public Room(String id, String displayName) {
     if (id == null || id.isBlank())
-      throw new IllegalArgumentException("Kambario ID negali būti tuščias");
+      throw new IllegalArgumentException("Kambario ID(pavadinimas) negali būti tuščias");
     this.id = id;
     this.displayName = displayName == null ? id : displayName;
   }
