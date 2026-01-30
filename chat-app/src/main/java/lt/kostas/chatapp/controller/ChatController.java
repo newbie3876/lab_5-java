@@ -6,6 +6,8 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import lt.kostas.chatapp.dto.Message;
 import lt.kostas.chatapp.network.NetworkClient;
 
@@ -17,9 +19,11 @@ public class ChatController {
   @FXML
   private ComboBox<String> roomSelector;
   @FXML
+  private ComboBox<String> recipientSelector;
+  @FXML
   private TextArea chatArea;
   @FXML
-  private TextField inputField;
+  private TextArea inputField;
   @FXML
   private Button sendButton;
   @FXML
@@ -32,24 +36,47 @@ public class ChatController {
 
   @FXML
   public void initialize() {
-    // Naudokime aiškų room id; serveris turi tokį patį id.
-    roomSelector.getItems().add("general");
-    roomSelector.getSelectionModel().selectFirst();
+    // Saugūs null patikrinimai (jei FXML neatlieka injekcijos)
+    if (roomSelector != null) {
+      roomSelector.getItems().add("general");
+      roomSelector.getSelectionModel().selectFirst();
+    }
+    if (recipientSelector != null) {
+      recipientSelector.getItems().add("");
+      recipientSelector.getSelectionModel().selectFirst();
+    }
 
     connectButton.setOnAction(ev -> doConnect());
     sendButton.setOnAction(ev -> doSend());
     createRoomButton.setOnAction(ev -> doCreateRoom());
 
-    // Kai vartotojas pakeičia pasirinkimą, praneškime serveriui, kad joinina tą kambarį.
-    roomSelector.setOnAction(ev -> {
-      if (client != null && username != null && !username.isEmpty()) {
-        String selectedRoom = roomSelector.getValue();
-        if (selectedRoom != null && !selectedRoom.isEmpty()) {
-          Message join = new Message("join-room", username, null, selectedRoom, null);
-          client.send(join);
+    if (roomSelector != null) {
+      roomSelector.setOnAction(ev -> {
+        if (client != null && username != null && !username.isEmpty()) {
+          String selectedRoom = roomSelector.getValue();
+          if (selectedRoom != null && !selectedRoom.isEmpty()) {
+            Message join = new Message("join-room", username, null, selectedRoom, null);
+            client.send(join);
+          }
         }
-      }
-    });
+      });
+    }
+    // 'Enter' išsiunčia žinutę, 'Shift+Enter' įterpia naują eilutę
+    if (inputField != null) {
+      inputField.addEventFilter(KeyEvent.KEY_PRESSED, ev -> {
+        if (ev.getCode() == KeyCode.ENTER) {
+          if (ev.isShiftDown()) {
+            int pos = inputField.getCaretPosition();
+            inputField.insertText(pos, "\n");
+            inputField.positionCaret(pos + 1);
+            ev.consume();
+          } else {
+            ev.consume();
+            doSend();
+          }
+        }
+      });
+    }
   }
 
   private void doConnect() {
@@ -58,10 +85,9 @@ public class ChatController {
     client = new NetworkClient();
     try {
       client.connect("localhost", 55555, this::onMessage);
-      // send register
       Message m = new Message("register", username, null, null, null);
       client.send(m);
-      // po registracijos automatiškai joininam dabartinį pasirinktą kambarį
+
       String currentRoom = roomSelector.getValue();
       if (currentRoom != null && !currentRoom.isEmpty()) {
         Message join = new Message("join-room", username, null, currentRoom, null);
@@ -76,50 +102,114 @@ public class ChatController {
 
   private void doSend() {
     if (client == null) {
-      appendLocal("Nesu prijungęs prie serverio.");
+      appendLocal("Neprisijungta prie serverio.");
       return;
     }
+    if (username == null || username.isEmpty()) {
+      appendLocal("Reikia būti prisijungus prieš siunčiant žinutes.");
+      return;
+    }
+
     String text = inputField.getText();
-    if (text == null || text.isEmpty()) return;
-    String roomId = roomSelector.getValue();
-    if (roomId == null || roomId.isEmpty()) {
-      appendLocal("Pasirinkite kambarį.");
-      return;
+    if (text == null) return;
+    if (text.trim().isEmpty()) return;
+
+    String to = null;
+    if (recipientSelector != null) {
+      String sel = recipientSelector.getValue();
+      if (sel != null && !sel.isBlank()) {
+        to = sel.trim();
+      }
     }
-    Message m = new Message("message", username, null, roomId, text);
-    client.send(m);
+
+    Message m;
+    if (to != null) {
+      m = new Message("message", username, to, null, text);
+    } else {
+      String roomId = roomSelector != null ? roomSelector.getValue() : null;
+      if (roomId == null || roomId.isEmpty()) {
+        appendLocal("Pasirinkite kambarį.");
+        return;
+      }
+      m = new Message("message", username, null, roomId, text);
+    }
+
+    try {
+      client.send(m);
+    } catch (Exception e) {
+      appendLocal("Klaida siunčiant: " + e.getMessage());
+    }
     inputField.clear();
-    // NEPRIDĖTI lokaliai — laukiame serverio broadcast (ji mums taip pat bus atsiųsta)
   }
 
   private void doCreateRoom() {
     if (client == null || username == null) {
-      appendLocal("Reikia prisijungti prieš kuriant kambarį.");
+      appendLocal("Reikia būti prisijungus prieš kuriant kambarį.");
       return;
     }
     String rn = newRoomField.getText();
     if (rn == null || rn.isEmpty()) return;
     String id = rn.trim().toLowerCase().replaceAll("\\s+", "-");
-    Message m = new Message("create-room", username, null, id, rn); // roomId=id, text=displayName
+    Message m = new Message("create-room", username, null, id, rn);
     client.send(m);
 
-    // Pridedame ROOM ID (ne display text) į ComboBox, kad toliau naudotume tą patį id
-    if (!roomSelector.getItems().contains(id)) {
+    if (roomSelector != null && !roomSelector.getItems().contains(id)) {
       roomSelector.getItems().add(id);
     }
-    // automatiškai joininam ką tik sukurtą kambarį
     Message join = new Message("join-room", username, null, id, null);
     client.send(join);
-
     newRoomField.clear();
   }
 
   private void onMessage(Message m) {
     Platform.runLater(() -> {
-      String room = m.roomId != null ? m.roomId : "pm";
-      String from = m.from != null ? m.from : "server";
-      String line = String.format("[%s] %s: %s", room, from, m.text);
-      chatArea.appendText(line + "\n");
+      // Saugiai nuskaityti tipą — jei nėra, laikome "message"
+      String type = "message";
+      try {
+        String t = m.type();
+        if (t != null) type = t;
+      } catch (NoSuchMethodError | AbstractMethodError | Exception err) {
+        type = "message";
+      }
+
+      switch (type) {
+        case "room-created" -> {
+          String id = m.roomId();
+          if (id != null && roomSelector != null && !roomSelector.getItems().contains(id)) {
+            roomSelector.getItems().add(id);
+          }
+          return;
+        }
+        case "user-joined" -> {
+          // Išsaugome m.text() ir m.from() į lokalius kintamuosius
+          String text = m.text();
+          String from = m.from();
+          String user = (text != null && !text.isBlank()) ? text : from;
+          if (user != null && recipientSelector != null && !recipientSelector.getItems().contains(user)) {
+            recipientSelector.getItems().add(user);
+          }
+          return;
+        }
+        case "user-left" -> {
+          String text = m.text();
+          String from = m.from();
+          String user = (text != null && !text.isBlank()) ? text : from;
+          if (recipientSelector != null) recipientSelector.getItems().remove(user);
+          return;
+        }
+      }
+      // message (viešas/privatus) - taip pat naudojame lokalius kintamuosius
+      String msgText = m.text();
+      String from = m.from();
+      String resolvedFrom = (from != null) ? from : "server";
+      String to = m.to();
+
+      if (to != null && !to.isBlank()) {
+        chatArea.appendText(String.format("[PM] %s -> %s: %s%n", resolvedFrom, to, msgText));
+      } else {
+        String room = m.roomId() != null ? m.roomId() : "pm";
+        chatArea.appendText(String.format("[%s] %s: %s%n", room, resolvedFrom, msgText));
+      }
     });
   }
 

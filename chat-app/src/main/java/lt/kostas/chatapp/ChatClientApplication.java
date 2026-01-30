@@ -13,7 +13,7 @@ public class ChatClientApplication extends Application {
   public void start(Stage primaryStage) throws Exception {
     Parent root = FXMLLoader.load(Objects.requireNonNull(getClass().getResource("/fxml/chat-room.fxml")));
     primaryStage.setTitle("Pokalbių kambarys");
-    primaryStage.setScene(new Scene(root, 800, 600));
+    primaryStage.setScene(new Scene(root, 1200, 700));
     primaryStage.show();
   }
 
